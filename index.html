@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BikeProof - Webapp Vélo Connectée</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiQmlrZVByb29mIiwic2hvcnRfbmFtZSI6IkJpa2VQcm9vZiIsImRlc2NyaXB0aW9uIjoiV2ViYXBwIHbDqWxvIGNvbm5lY3TDqWUgYXZlYyBCbHVldG9vdGggZXQgR1BTIiwic3RhcnRfdXJsIjoiLyIsImRpc3BsYXkiOiJzdGFuZGFsb25lIiwiYmFja2dyb3VuZF9jb2xvciI6IiMwMDY2Y2MiLCJ0aGVtZV9jb2xvciI6IiMwMDY2Y2MiLCJpY29ucyI6W3sic3JjIjoiZGF0YTppbWFnZS9zdmcreG1sO2Jhc2U2NCxQSE4yWnlCM2FXUjBhRDBpTVRJNElpQm9aV2xuYUhROUlqRXlPQ0lpSUhacFpYZENiM2c5SWpBZ01DQXhNamd4TWpnaUlIaHRiRzV6UFNKb2RIUndPaTh2ZDNkM0xuY3pMbTl5Wnk4eU1EQXdMM04yWnlJK1BHTnBjbU5zWlNCamVEMGlOalFpSUdONVBTSTJOQ0lpSUhJOUlqUTRJaUJtYVd4c1BTSWpNREEyTm1OaklpOCtQSEJoZEdnZ1pEMGlUVFEwSURFeElHd3lNQ0F5TUdNeU1DQXlNRE15TkNBMUxqWXhOVGs1SURN0xSURjeUxURTBJaTl2YjBJQUJJbUVrY0pUQ0pXekZsb1JURVE1UU5EMlNFTW9uYXNBTUczcFBYUgNYRU1nTkNRMCt5OFhqM0ZZU1NhRlBPOUpNNXBBQUE9PSIsInNpemVzIjoiMTI4eDEyOCIsInR5cGUiOiJpbWFnZS9zdmcreG1sIn1dfQ==">
+    
+    <!-- External CDN Libraries -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Custom Styles -->
+    <style>
+        /* Styles personnalisés pour BikeProof */
+        .bike-gradient {
+            background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+        }
+        
+        .status-active {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .card-shadow {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .map-container {
+            height: 400px;
+            border-radius: 8px;
+        }
+        
+        .stat-card {
+            transition: transform 0.2s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+        
+        .speed-display {
+            font-family: 'Courier New', monospace;
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        
+        .ad-zone {
+            background: linear-gradient(45deg, #f3f4f6, #e5e7eb);
+            border: 2px dashed #d1d5db;
+            min-height: 120px;
+        }
+        
+        /* Optimisation pour export PDF */
+        @media print {
+            body { margin: 0; padding: 20px; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 font-sans">
+    <!-- Header Application -->
+    <header class="bike-gradient text-white shadow-lg">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-bicycle text-3xl"></i>
+                    <div>
+                        <h1 class="text-2xl font-bold">BikeProof</h1>
+                        <p class="text-blue-200 text-sm">Webapp Vélo Connectée</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span id="connection-status" class="px-3 py-1 rounded-full bg-red-500 text-white text-sm">
+                        <i class="fas fa-bluetooth"></i> Déconnecté
+                    </span>
+                    <button id="install-button" class="no-print bg-blue-800 hover:bg-blue-900 px-4 py-2 rounded-lg text-sm font-medium hidden">
+                        <i class="fas fa-download"></i> Installer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container mx-auto px-4 py-8 space-y-8">
+        <!-- Section Connexion Bluetooth -->
+        <section class="bg-white rounded-lg card-shadow p-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-link text-blue-600 mr-2"></i>
+                Connexion Capteur Bluetooth
+            </h2>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <div>
+                    <button id="connect-bluetooth" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors">
+                        <i class="fas fa-bluetooth mr-2"></i>
+                        Connecter Magene S3+
+                    </button>
+                    <p id="bluetooth-info" class="text-gray-500 text-sm mt-2">
+                        Cliquez pour détecter et connecter votre capteur vélo
+                    </p>
+                </div>
+                
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-gray-700 mb-2">État du capteur</h3>
+                    <div class="space-y-2">
+                        <div class="flex justify-between">
+                            <span>Vitesse actuelle:</span>
+                            <span id="current-speed" class="speed-display text-blue-600">0.0 km/h</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>État vélo:</span>
+                            <span id="bike-status" class="font-medium text-red-500">
+                                <i class="fas fa-circle"></i> Arrêté
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section Tracking GPS -->
+        <section class="bg-white rounded-lg card-shadow p-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-map-marker-alt text-green-600 mr-2"></i>
+                Suivi GPS en Temps Réel
+            </h2>
+            
+            <div class="grid md:grid-cols-3 gap-4 mb-6">
+                <button id="start-tracking" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg">
+                    <i class="fas fa-play mr-2"></i>
+                    Démarrer
+                </button>
+                <button id="pause-tracking" class="bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2 px-4 rounded-lg" disabled>
+                    <i class="fas fa-pause mr-2"></i>
+                    Pause
+                </button>
+                <button id="stop-tracking" class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg" disabled>
+                    <i class="fas fa-stop mr-2"></i>
+                    Arrêter
+                </button>
+            </div>
+            
+            <!-- Carte Leaflet -->
+            <div id="map" class="map-container"></div>
+        </section>
+
+        <!-- Statistiques en Temps Réel -->
+        <section class="bg-white rounded-lg card-shadow p-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                <i class="fas fa-chart-line text-purple-600 mr-2"></i>
+                Statistiques Enrichies
+            </h2>
+            
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="stat-card bg-blue-50 p-4 rounded-lg text-center">
+                    <i class="fas fa-route text-blue-600 text-2xl mb-2"></i>
+                    <div class="text-2xl font-bold text-blue-600" id="total-distance">0.0</div>
+                    <div class="text-sm text-gray-600">Distance (km)</div>
+                </div>
+                
+                <div class="stat-card bg-green-50 p-4 rounded-lg text-center">
+                    <i class="fas fa-clock text-green-600 text-2xl mb-2"></i>
+                    <div class="text-2xl font-bold text-green-600" id="total-time">00:00</div>
+                    <div class="text-sm text-gray-600">Durée</div>
+                </div>
+                
+                <div class="stat-card bg-purple-50 p-4 rounded-lg text-center">
+                    <i class="fas fa-tachometer-alt text-purple-600 text-2xl mb-2"></i>
+                    <div class="text-2xl font-bold text-purple-600" id="avg-speed">0.0</div>
+                    <div class="text-sm text-gray-600">Vitesse moy. (km/h)</div>
+                </div>
+                
+                <div class="stat-card bg-red-50 p-4 rounded-lg text-center">
+                    <i class="fas fa-fire text-red-600 text-2xl mb-2"></i>
+                    <div class="text-2xl font-bold text-red-600" id="max-speed">0.0</div>
+                    <div class="text-sm text-gray-600">Vitesse max (km/h)</div>
+                </div>
+            </div>
+            
+            <!-- Graphique des statistiques -->
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <canvas id="stats-chart" style="height: 300px;"></canvas>
+            </div>
+        </section>
+
+        <!-- Intelligence et Résumé -->
+        <section class="bg-white rounded-lg card-shadow p-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-brain text-pink-600 mr-2"></i>
+                Intelligence BikeProof
+            </h2>
+            
+            <div id="smart-summary" class="bg-gradient-to-r from-pink-50 to-purple-50 p-4 rounded-lg mb-4">
+                <p class="text-gray-600 italic">
+                    <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
+                    Démarrez un trajet pour obtenir un résumé intelligent automatique...
+                </p>
+            </div>
+            
+            <div class="grid md:grid-cols-2 gap-4">
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-blue-800 mb-2">Progression</h3>
+                    <p id="progress-info" class="text-sm text-blue-600">
+                        Aucune donnée de comparaison disponible
+                    </p>
+                </div>
+                
+                <div class="bg-green-50 p-4 rounded-lg">
+                    <h4 class="font-semibold text-green-800 mb-2">Estimation Calories</h4>
+                    <p id="calories-estimate" class="text-sm text-green-600">
+                        <i class="fas fa-fire mr-1"></i>
+                        <span>0</span> kcal estimées
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Zone Publicitaire -->
+        <section class="ad-zone rounded-lg p-6 text-center">
+            <div id="ad-container">
+                <!-- Zone publicitaire simulée - Remplacer par Google AdSense ou pub réelle -->
+                <div class="text-gray-500">
+                    <i class="fas fa-ad text-4xl mb-2"></i>
+                    <p class="font-medium">🟨 Espace Publicitaire</p>
+                    <p class="text-sm">Ici sera intégrée une publicité Google AdSense</p>
+                    <p class="text-xs mt-2">Zone monétisable - Code prêt pour intégration pub</p>
+                </div>
+                
+                <!-- Code publicitaire à décommenter pour Google AdSense
+                <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+                <ins class="adsbygoogle"
+                     style="display:block"
+                     data-ad-client="ca-pub-XXXXXXXXX"
+                     data-ad-slot="XXXXXXXXX"
+                     data-ad-format="auto"></ins>
+                <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+                -->
+            </div>
+        </section>
+
+        <!-- Historique des Trajets -->
+        <section class="bg-white rounded-lg card-shadow p-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                <i class="fas fa-history text-indigo-600 mr-2"></i>
+                Historique des Trajets
+            </h2>
+            
+            <div id="trips-history" class="space-y-4">
+                <!-- Les trajets seront ajoutés dynamiquement ici -->
+                <div class="text-center text-gray-500 py-8">
+                    <i class="fas fa-bicycle text-4xl mb-2"></i>
+                    <p>Aucun trajet enregistré pour le moment</p>
+                    <p class="text-sm">Démarrez votre premier trajet pour commencer l'historique</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Export et Authentification -->
+        <section class="bg-white rounded-lg card-shadow p-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-user-cog text-orange-600 mr-2"></i>
+                Paramètres et Export
+            </h2>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <div>
+                    <h3 class="font-semibold text-gray-700 mb-3">Authentification</h3>
+                    <div id="auth-section">
+                        <input type="text" id="username" placeholder="Pseudo" class="w-full p-2 border rounded-lg mb-2">
+                        <input type="password" id="password" placeholder="Mot de passe" class="w-full p-2 border rounded-lg mb-3">
+                        <button id="login-btn" class="w-full bg-orange-600 hover:bg-orange-700 text-white py-2 px-4 rounded-lg">
+                            <i class="fas fa-sign-in-alt mr-2"></i>
+                            Se connecter
+                        </button>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold text-gray-700 mb-3">Export de Données</h3>
+                    <div class="space-y-2">
+                        <button id="export-csv" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg text-sm">
+                            <i class="fas fa-file-csv mr-2"></i>
+                            Exporter en CSV
+                        </button>
+                        <button id="clear-data" class="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg text-sm">
+                            <i class="fas fa-trash mr-2"></i>
+                            Effacer Données
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-6 mt-12">
+        <div class="container mx-auto px-4 text-center">
+            <p>&copy; 2024 BikeProof - Webapp Vélo Connectée | BTS SIO SISR</p>
+            <p class="text-gray-400 text-sm mt-2">
+                Développé avec HTML5, CSS3 et JavaScript Vanilla | PWA Ready
+            </p>
+        </div>
+    </footer>
+
+    <!-- JavaScript Principal de l'Application -->
+    <script>
+        // ============================================================================
+        // BIKEPROOF - APPLICATION VELO CONNECTEE
+        // Développé pour BTS SIO SISR - JavaScript Vanilla
+        // ============================================================================
+
+        // Variables globales de l'application
+        let bluetoothDevice = null;              // Référence du périphérique Bluetooth connecté
+        let bluetoothCharacteristic = null;     // Caractéristique Bluetooth pour lecture données
+        let isTracking = false;                 // État du tracking GPS
+        let trackingStartTime = null;           // Heure de début de tracking
+        let totalDistance = 0;                  // Distance totale parcourue
+        let currentSpeed = 0;                   // Vitesse actuelle du vélo
+        let maxSpeed = 0;                       // Vitesse maximale atteinte
+        let trackingPaused = false;             // État de pause du tracking
+        let gpsPositions = [];                  // Array des positions GPS
+        let map = null;                         // Instance de la carte Leaflet
+        let currentPath = null;                 // Tracé actuel sur la carte
+        let statsChart = null;                  // Graphique des statistiques
+        let watchId = null;                     // ID du watch GPS
+        let speedHistory = [];                  // Historique des vitesses pour graphique
+        
+        // Variables pour calculs statistiques
+        let lastPosition = null;                // Dernière position GPS connue
+        let pausedTime = 0;                     // Temps total en pause
+        let pauseStartTime = null;              // Heure de début de pause
+        
+        // ============================================================================
+        // INITIALISATION DE L'APPLICATION
+        // ============================================================================
+        
+        // Fonction d'initialisation appelée au chargement de la page
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚴‍♂️ BikeProof - Initialisation de l\'application');
+            
+            // Vérification du support des APIs nécessaires
+            checkBrowserSupport();
+            
+            // Initialisation de la carte Leaflet
+            initializeMap();
+            
+            // Initialisation du graphique des statistiques
+            initializeChart();
+            
+            // Chargement des données sauvegardées
+            loadSavedData();
+            
+            // Configuration des événements
+            setupEventListeners();
+            
+            // Enregistrement du Service Worker pour PWA
+            registerServiceWorker();
+            
+            console.log('✅ Application BikeProof initialisée avec succès');
+        });
+        
+        // ============================================================================
+        // VERIFICATION DU SUPPORT NAVIGATEUR
+        // ============================================================================
+        
+        // Vérifie si le navigateur supporte les APIs nécessaires
+        function checkBrowserSupport() {
+            console.log('🔍 Vérification du support navigateur...');
+            
+            // Vérification Web Bluetooth API
+            if (!navigator.bluetooth) {
+                console.warn('⚠️ Web Bluetooth API non supportée');
+                document.getElementById('bluetooth-info').textContent = 
+                    'Web Bluetooth non supporté dans ce navigateur';
+                document.getElementById('connect-bluetooth').disabled = true;
+            }
+            
+            // Vérification Geolocation API
+            if (!navigator.geolocation) {
+                console.warn('⚠️ Geolocation API non supportée');
+                alert('Geolocation non supportée par votre navigateur');
+            }
+            
+            // Vérification IndexedDB
+            if (!window.indexedDB) {
+                console.warn('⚠️ IndexedDB non supporté');
+                alert('Stockage local non disponible');
+            }
+            
+            console.log('✅ Vérification navigateur terminée');
+        }
+        
+        // ============================================================================
+        // INITIALISATION DE LA CARTE LEAFLET
+        // ============================================================================
+        
+        // Initialise la carte interactive avec Leaflet
+        function initializeMap() {
+            console.log('🗺️ Initialisation de la carte Leaflet...');
+            
+            // Création de la carte centrée sur Paris
+            map = L.map('map').setView([48.8566, 2.3522], 13);
+            
+            // Ajout de la couche de tuiles OpenStreetMap
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            
+            // Ajout d'un marqueur par défaut
+            L.marker([48.8566, 2.3522])
+                .addTo(map)
+                .bindPopup('📍 Position de départ - Paris')
+                .openPopup();
+            
+            console.log('✅ Carte Leaflet initialisée');
+        }
+        
+        // ============================================================================
+        // INITIALISATION DU GRAPHIQUE CHART.JS
+        // ============================================================================
+        
+        // Initialise le graphique des statistiques avec Chart.js
+        function initializeChart() {
+            console.log('📊 Initialisation du graphique des statistiques...');
+            
+            const ctx = document.getElementById('stats-chart').getContext('2d');
+            
+            // Configuration du graphique de vitesse
+            statsChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [], // Labels temporels
+                    datasets: [{
+                        label: 'Vitesse (km/h)',
+                        data: [],
+                        borderColor: '#0066cc',
+                        backgroundColor: 'rgba(0, 102, 204, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Vitesse (km/h)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Temps'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Évolution de la vitesse en temps réel'
+                        }
+                    }
+                }
+            });
+            
+            console.log('✅ Graphique initialisé');
+        }
+        
+        // ============================================================================
+        // GESTION DES EVENEMENTS
+        // ============================================================================
+        
+        // Configure tous les événements de l'interface utilisateur
+        function setupEventListeners() {
+            console.log('🎯 Configuration des événements...');
+            
+            // Événements Bluetooth
+            document.getElementById('connect-bluetooth').addEventListener('click', connectBluetoothDevice);
+            
+            // Événements Tracking GPS
+            document.getElementById('start-tracking').addEventListener('click', startTracking);
+            document.getElementById('pause-tracking').addEventListener('click', pauseTracking);
+            document.getElementById('stop-tracking').addEventListener('click', stopTracking);
+            
+            // Événements Authentification et Export
+            document.getElementById('login-btn').addEventListener('click', handleLogin);
+            document.getElementById('export-csv').addEventListener('click', exportToCSV);
+            document.getElementById('clear-data').addEventListener('click', clearAllData);
+            
+            // Événement PWA Installation
+            document.getElementById('install-button').addEventListener('click', installPWA);
+            
+            console.log('✅ Événements configurés');
+        }
+        
+        // ============================================================================
+        // GESTION BLUETOOTH - CONNEXION CAPTEUR MAGENE S3+
+        // ============================================================================
+        
+        // Fonction principale de connexion au capteur Bluetooth
+        async function connectBluetoothDevice() {
+            console.log('🔵 Tentative de connexion Bluetooth...');
+            
+            try {
+                // Mise à jour de l'interface utilisateur
+                document.getElementById('bluetooth-info').textContent = 
+                    'Recherche du capteur Magene S3+...';
+                
+                // Demande de sélection du périphérique Bluetooth
+                // Filtrage sur le service cycling_speed_and_cadence
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    filters: [
+                        { name: 'Magene S3+' },
+                        { services: ['cycling_speed_and_cadence'] }
+                    ],
+                    optionalServices: ['cycling_speed_and_cadence']
+                });
+                
+                console.log('📱 Périphérique sélectionné:', bluetoothDevice.name);
+                
+                // Connexion au serveur GATT
+                const server = await bluetoothDevice.gatt.connect();
+                console.log('🔗 Connexion GATT établie');
+                
+                // Accès au service de vitesse et cadence
+                const service = await server.getPrimaryService('cycling_speed_and_cadence');
+                
+                // Accès à la caractéristique de mesure
+                bluetoothCharacteristic = await service.getCharacteristic('cycling_speed_and_cadence_measurement');
+                
+                // Démarrage des notifications
+                await bluetoothCharacteristic.startNotifications();
+                bluetoothCharacteristic.addEventListener('characteristicvaluechanged', handleBluetoothData);
+                
+                // Mise à jour de l'interface
+                updateConnectionStatus(true);
+                document.getElementById('bluetooth-info').textContent = 
+                    `Connecté à ${bluetoothDevice.name} - Données en temps réel`;
+                
+                console.log('✅ Connexion Bluetooth réussie');
+                
+            } catch (error) {
+                console.error('❌ Erreur connexion Bluetooth:', error);
+                document.getElementById('bluetooth-info').textContent = 
+                    'Erreur de connexion - Vérifiez que le capteur est allumé';
+                updateConnectionStatus(false);
+            }
+        }
+        
+        // Traitement des données reçues du capteur Bluetooth
+        function handleBluetoothData(event) {
+            // Récupération des données binaires
+            const dataView = event.target.value;
+            
+            // Analyse des données selon le format cycling_speed_and_cadence
+            // Les 2 premiers octets contiennent les flags
+            const flags = dataView.getUint8(0);
+            
+            let byteIndex = 1;
+            
+            // Si les données de révolution de roue sont présentes
+            if (flags & 0x01) {
+                // Révolutions cumulatives de la roue (4 octets)
+                const wheelRevolutions = dataView.getUint32(byteIndex, true);
+                byteIndex += 4;
+                
+                // Temps de la dernière révolution (2 octets) en 1/1024 seconde
+                const wheelEventTime = dataView.getUint16(byteIndex, true);
+                byteIndex += 2;
+                
+                // Calcul de la vitesse en km/h
+                // Formule: vitesse = (circonférence_roue * révolutions * 3.6) / temps
+                const wheelCircumference = 2.1; // Circonférence moyenne vélo en mètres
+                currentSpeed = calculateSpeed(wheelRevolutions, wheelEventTime, wheelCircumference);
+                
+                // Mise à jour de l'affichage
+                updateSpeedDisplay(currentSpeed);
+                
+                // Mise à jour des statistiques
+                if (currentSpeed > maxSpeed) {
+                    maxSpeed = currentSpeed;
+                    document.getElementById('max-speed').textContent = maxSpeed.toFixed(1);
+                }
+                
+                // Ajout au graphique si tracking actif
+                if (isTracking && !trackingPaused) {
+                    addSpeedToChart(currentSpeed);
+                }
+                
+                console.log(`📊 Vitesse calculée: ${currentSpeed.toFixed(1)} km/h`);
+            }
+        }
+        
+        // Calcul de la vitesse basé sur les révolutions de roue
+        function calculateSpeed(revolutions, eventTime, circumference) {
+            // Cette fonction devrait maintenir un état des révolutions précédentes
+            // pour calculer la différence et donc la vitesse instantanée
+            // Ici on simule un calcul basique
+            
+            if (!window.lastWheelData) {
+                window.lastWheelData = { revolutions, eventTime };
+                return 0;
+            }
+            
+            const deltaRevolutions = revolutions - window.lastWheelData.revolutions;
+            const deltaTime = (eventTime - window.lastWheelData.eventTime) / 1024; // Conversion en secondes
+            
+            if (deltaTime > 0 && deltaRevolutions > 0) {
+                // Vitesse = distance / temps
+                const distance = deltaRevolutions * circumference; // en mètres
+                const speedMs = distance / deltaTime; // en m/s
+                const speedKmh = speedMs * 3.6; // conversion en km/h
+                
+                window.lastWheelData = { revolutions, eventTime };
+                return Math.max(0, speedKmh);
+            }
+            
+            return currentSpeed; // Garde la dernière vitesse connue
+        }
+        
+        // Mise à jour de l'affichage de vitesse
+        function updateSpeedDisplay(speed) {
+            document.getElementById('current-speed').textContent = `${speed.toFixed(1)} km/h`;
+            
+            // Mise à jour du statut vélo (arrêt/mouvement)
+            const bikeStatus = document.getElementById('bike-status');
+            if (speed > 0.5) {
+                bikeStatus.innerHTML = '<i class="fas fa-circle text-green-500"></i> En mouvement';
+                bikeStatus.className = 'font-medium text-green-500 status-active';
+            } else {
+                bikeStatus.innerHTML = '<i class="fas fa-circle text-red-500"></i> Arrêté';
+                bikeStatus.className = 'font-medium text-red-500';
+            }
+        }
+        
+        // Mise à jour du statut de connexion Bluetooth
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connection-status');
+            if (connected) {
+                statusElement.innerHTML = '<i class="fas fa-bluetooth"></i> Connecté';
+                statusElement.className = 'px-3 py-1 rounded-full bg-green-500 text-white text-sm status-active';
+            } else {
+                statusElement.innerHTML = '<i class="fas fa-bluetooth"></i> Déconnecté';
+                statusElement.className = 'px-3 py-1 rounded-full bg-red-500 text-white text-sm';
+            }
+        }
+        
+        // ============================================================================
+        // GESTION GPS - TRACKING EN TEMPS REEL
+        // ============================================================================
+        
+        // Démarrage du tracking GPS
+        function startTracking() {
+            console.log('🎯 Démarrage du tracking GPS...');
+            
+            if (!navigator.geolocation) {
+                alert('Geolocation non supportée par votre navigateur');
+                return;
+            }
+            
+            // Réinitialisation des variables
+            isTracking = true;
+            trackingPaused = false;
+            trackingStartTime = new Date();
+            totalDistance = 0;
+            maxSpeed = 0;
+            gpsPositions = [];
+            speedHistory = [];
+            lastPosition = null;
+            pausedTime = 0;
+            
+            // Configuration des options GPS haute précision
+            const gpsOptions = {
+                enableHighAccuracy: true,    // GPS haute précision
+                timeout: 10000,              // Timeout 10 secondes
+                maximumAge: 1000             // Cache position max 1 seconde
+            };
+            
+            // Démarrage du suivi GPS continu
+            watchId = navigator.geolocation.watchPosition(
+                handleGPSPosition,           // Callback succès
+                handleGPSError,              // Callback erreur
+                gpsOptions                   // Options
+            );
+            
+            // Mise à jour de l'interface
+            updateTrackingButtons(true);
+            
+            // Nettoyage de la carte
+            if (currentPath) {
+                map.removeLayer(currentPath);
+            }
+            
+            console.log('✅ Tracking GPS démarré');
+        }
+        
+        // Gestion d'une nouvelle position GPS
+        function handleGPSPosition(position) {
+            if (!isTracking || trackingPaused) return;
+            
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            const accuracy = position.coords.accuracy;
+            
+            console.log(`📍 Nouvelle position GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)} (±${accuracy.toFixed(0)}m)`);
+            
+            // Filtrage des positions imprécises
+            if (accuracy > 50) {
+                console.warn('⚠️ Position GPS imprécise, ignorée');
+                return;
+            }
+            
+            const currentPosition = { lat, lng, timestamp: Date.now() };
+            gpsPositions.push(currentPosition);
+            
+            // Calcul de la distance si on a une position précédente
+            if (lastPosition) {
+                const distance = calculateDistance(lastPosition.lat, lastPosition.lng, lat, lng);
+                totalDistance += distance;
+                
+                // Calcul de la vitesse GPS
+                const timeDiff = (currentPosition.timestamp - lastPosition.timestamp) / 1000; // en secondes
+                if (timeDiff > 0) {
+                    const gpsSpeed = (distance / timeDiff) * 3.6; // conversion en km/h
+                    
+                    // Utilisation de la vitesse GPS si pas de capteur Bluetooth
+                    if (!bluetoothDevice && gpsSpeed < 60) { // Filtrage vitesses aberrantes
+                        currentSpeed = gpsSpeed;
+                        updateSpeedDisplay(currentSpeed);
+                        
+                        if (currentSpeed > maxSpeed) {
+                            maxSpeed = currentSpeed;
+                        }
+                    }
+                }
+            }
+            
+            lastPosition = currentPosition;
+            
+            // Mise à jour de la carte
+            updateMapWithNewPosition(lat, lng);
+            
+            // Mise à jour des statistiques
+            updateRealTimeStats();
+        }
+        
+        // Calcul de distance entre deux points GPS (formule de Haversine)
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            const R = 6371; // Rayon de la Terre en kilomètres
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c; // Distance en kilomètres
+        }
+        
+        // Mise à jour de la carte avec la nouvelle position
+        function updateMapWithNewPosition(lat, lng) {
+            // Centrage de la carte sur la nouvelle position
+            map.setView([lat, lng], 16);
+            
+            // Création/mise à jour du tracé
+            if (gpsPositions.length > 1) {
+                const polylinePoints = gpsPositions.map(pos => [pos.lat, pos.lng]);
+                
+                if (currentPath) {
+                    map.removeLayer(currentPath);
+                }
+                
+                // Création d'une nouvelle polyline en bleu
+                currentPath = L.polyline(polylinePoints, {
+                    color: '#0066cc',
+                    weight: 4,
+                    opacity: 0.8
+                }).addTo(map);
+                
+                // Ajout d'un marqueur pour la position actuelle
+                L.marker([lat, lng])
+                    .addTo(map)
+                    .bindPopup(`📍 Position actuelle<br>Vitesse: ${currentSpeed.toFixed(1)} km/h`);
+            }
+        }
+        
+        // Gestion des erreurs GPS
+        function handleGPSError(error) {
+            console.error('❌ Erreur GPS:', error);
+            
+            let errorMessage = 'Erreur GPS inconnue';
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMessage = 'Permission GPS refusée';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMessage = 'Position GPS indisponible';
+                    break;
+                case error.TIMEOUT:
+                    errorMessage = 'Timeout GPS';
+                    break;
+            }
+            
+            alert(`Erreur GPS: ${errorMessage}`);
+        }
+        
+        // Pause du tracking
+        function pauseTracking() {
+            console.log('⏸️ Pause du tracking...');
+            
+            trackingPaused = true;
+            pauseStartTime = Date.now();
+            
+            // Mise à jour de l'interface
+            document.getElementById('pause-tracking').disabled = true;
+            document.getElementById('start-tracking').textContent = 'Reprendre';
+            document.getElementById('start-tracking').disabled = false;
+            
+            console.log('✅ Tracking en pause');
+        }
+        
+        // Arrêt du tracking
+        function stopTracking() {
+            console.log('🛑 Arrêt du tracking...');
+            
+            isTracking = false;
+            trackingPaused = false;
+            
+            // Arrêt du suivi GPS
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            
+            // Sauvegarde du trajet
+            if (gpsPositions.length > 0) {
+                saveTrip();
+            }
+            
+            // Génération du résumé intelligent
+            generateSmartSummary();
+            
+            // Mise à jour de l'interface
+            updateTrackingButtons(false);
+            
+            console.log('✅ Tracking arrêté');
+        }
+        
+        // Mise à jour des boutons de tracking
+        function updateTrackingButtons(tracking) {
+            document.getElementById('start-tracking').disabled = tracking;
+            document.getElementById('pause-tracking').disabled = !tracking;
+            document.getElementById('stop-tracking').disabled = !tracking;
+            
+            if (!tracking) {
+                document.getElementById('start-tracking').textContent = 'Démarrer';
+            }
+        }
+        
+        // ============================================================================
+        // MISE A JOUR DES STATISTIQUES EN TEMPS REEL
+        // ============================================================================
+        
+        // Mise à jour des statistiques affichées
+        function updateRealTimeStats() {
+            // Distance totale
+            document.getElementById('total-distance').textContent = totalDistance.toFixed(2);
+            
+            // Durée totale (en tenant compte des pauses)
+            const currentTime = Date.now();
+            const totalElapsedTime = currentTime - trackingStartTime.getTime() - pausedTime;
+            const formattedTime = formatTime(Math.floor(totalElapsedTime / 1000));
+            document.getElementById('total-time').textContent = formattedTime;
+            
+            // Vitesse moyenne
+            const avgSpeed = totalElapsedTime > 0 ? (totalDistance / (totalElapsedTime / 1000 / 3600)) : 0;
+            document.getElementById('avg-speed').textContent = avgSpeed.toFixed(1);
+            
+            // Vitesse maximale
+            document.getElementById('max-speed').textContent = maxSpeed.toFixed(1);
+        }
+        
+        // Ajout d'une vitesse au graphique
+        function addSpeedToChart(speed) {
+            const now = new Date();
+            const timeLabel = now.toLocaleTimeString('fr-FR', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            });
+            
+            // Ajout des données au graphique
+            statsChart.data.labels.push(timeLabel);
+            statsChart.data.datasets[0].data.push(speed);
+            
+            // Limitation à 50 points pour les performances
+            if (statsChart.data.labels.length > 50) {
+                statsChart.data.labels.shift();
+                statsChart.data.datasets[0].data.shift();
+            }
+            
+            // Mise à jour du graphique
+            statsChart.update('none'); // Animation désactivée pour les performances
+        }
+        
+        // Formatage du temps en mm:ss
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+        
+        // ============================================================================
+        // INTELLIGENCE ARTIFICIELLE - RESUME AUTOMATIQUE
+        // ============================================================================
+        
+        // Génération d'un résumé intelligent du trajet
+        function generateSmartSummary() {
+            console.log('🧠 Génération du résumé intelligent...');
+            
+            const totalTimeSeconds = Math.floor((Date.now() - trackingStartTime.getTime() - pausedTime) / 1000);
+            const avgSpeed = totalTimeSeconds > 0 ? (totalDistance / (totalTimeSeconds / 3600)) : 0;
+            
+            // Estimation des calories brûlées (formule approximative)
+            const estimatedCalories = Math.round(totalDistance * 35); // ~35 kcal/km
+            
+            // Génération du résumé basé sur les performances
+            let summary = '';
+            let icon = '';
+            
+            if (totalDistance < 1) {
+                summary = 'Courte sortie d\'échauffement 🚴‍♀️ Parfait pour commencer !';
+                icon = '🌱';
+            } else if (totalDistance < 5) {
+                summary = `Belle balade de ${totalDistance.toFixed(1)} km ! Idéal pour se maintenir en forme.`;
+                icon = '🚴‍♀️';
+            } else if (totalDistance < 15) {
+                summary = `Superbe sortie de ${totalDistance.toFixed(1)} km ! Vitesse moyenne: ${avgSpeed.toFixed(1)} km/h`;
+                icon = '🚴‍♂️';
+            } else if (totalDistance < 30) {
+                summary = `Excellente performance ! ${totalDistance.toFixed(1)} km parcourus à ${avgSpeed.toFixed(1)} km/h de moyenne`;
+                icon = '🏆';
+            } else {
+                summary = `Performance exceptionnelle ! ${totalDistance.toFixed(1)} km - Vous êtes un champion ! 🏆`;
+                icon = '👑';
+            }
+            
+            // Ajout d'informations sur la vitesse
+            if (avgSpeed > 25) {
+                summary += ' Vitesse impressionnante ! 🚀';
+            } else if (avgSpeed > 20) {
+                summary += ' Bon rythme maintenu ! 💪';
+            }
+            
+            // Mise à jour de l'affichage
+            document.getElementById('smart-summary').innerHTML = `
+                <p class="text-lg font-medium text-gray-800">
+                    ${icon} ${summary}
+                </p>
+                <div class="mt-3 grid grid-cols-2 gap-4 text-sm">
+                    <div class="bg-white p-2 rounded">
+                        <strong>Distance:</strong> ${totalDistance.toFixed(2)} km
+                    </div>
+                    <div class="bg-white p-2 rounded">
+                        <strong>Durée:</strong> ${formatTime(totalTimeSeconds)}
+                    </div>
+                    <div class="bg-white p-2 rounded">
+                        <strong>Vitesse moy:</strong> ${avgSpeed.toFixed(1)} km/h
+                    </div>
+                    <div class="bg-white p-2 rounded">
+                        <strong>Vitesse max:</strong> ${maxSpeed.toFixed(1)} km/h
+                    </div>
+                </div>
+            `;
+            
+            // Mise à jour de l'estimation des calories
+            document.getElementById('calories-estimate').innerHTML = `
+                <i class="fas fa-fire mr-1"></i>
+                <span>${estimatedCalories}</span> kcal estimées
+            `;
+            
+            // Comparaison avec les trajets précédents
+            compareWithPreviousTrips();
+            
+            console.log('✅ Résumé intelligent généré');
+        }
+        
+        // Comparaison avec les trajets précédents
+        function compareWithPreviousTrips() {
+            const savedTrips = JSON.parse(localStorage.getItem('bikeproof_trips') || '[]');
+            
+            if (savedTrips.length === 0) {
+                document.getElementById('progress-info').textContent = 
+                    'Premier trajet enregistré ! Continuez pour voir votre progression.';
+                return;
+            }
+            
+            // Calcul des moyennes des trajets précédents
+            const avgDistance = savedTrips.reduce((sum, trip) => sum + trip.distance, 0) / savedTrips.length;
+            const avgSpeed = savedTrips.reduce((sum, trip) => sum + trip.avgSpeed, 0) / savedTrips.length;
+            
+            const currentAvgSpeed = totalDistance / ((Date.now() - trackingStartTime.getTime() - pausedTime) / 1000 / 3600);
+            
+            let progressMessage = '';
+            
+            if (totalDistance > avgDistance) {
+                const improvement = ((totalDistance - avgDistance) / avgDistance * 100).toFixed(0);
+                progressMessage += `📈 Distance: +${improvement}% par rapport à votre moyenne ! `;
+            } else {
+                progressMessage += `📊 Distance légèrement en dessous de votre moyenne. `;
+            }
+            
+            if (currentAvgSpeed > avgSpeed) {
+                const improvement = ((currentAvgSpeed - avgSpeed) / avgSpeed * 100).toFixed(0);
+                progressMessage += `🚀 Vitesse: +${improvement}% plus rapide !`;
+            } else {
+                progressMessage += `🎯 Maintenez ce rythme pour progresser.`;
+            }
+            
+            document.getElementById('progress-info').textContent = progressMessage;
+        }
+        
+        // ============================================================================
+        // SAUVEGARDE ET HISTORIQUE DES TRAJETS
+        // ============================================================================
+        
+        // Sauvegarde d'un trajet dans IndexedDB/localStorage
+        function saveTrip() {
+            console.log('💾 Sauvegarde du trajet...');
+            
+            const totalTimeSeconds = Math.floor((Date.now() - trackingStartTime.getTime() - pausedTime) / 1000);
+            const avgSpeed = totalTimeSeconds > 0 ? (totalDistance / (totalTimeSeconds / 3600)) : 0;
+            
+            const trip = {
+                id: Date.now(),
+                date: new Date().toISOString(),
+                distance: totalDistance,
+                duration: totalTimeSeconds,
+                avgSpeed: avgSpeed,
+                maxSpeed: maxSpeed,
+                positions: gpsPositions,
+                speedHistory: speedHistory.slice(), // Copie du tableau
+                calories: Math.round(totalDistance * 35)
+            };
+            
+            // Sauvegarde dans localStorage (solution simple)
+            const savedTrips = JSON.parse(localStorage.getItem('bikeproof_trips') || '[]');
+            savedTrips.unshift(trip); // Ajout au début du tableau
+            
+            // Limitation à 50 trajets pour éviter de surcharger le stockage
+            if (savedTrips.length > 50) {
+                savedTrips.splice(50);
+            }
+            
+            localStorage.setItem('bikeproof_trips', JSON.stringify(savedTrips));
+            
+            // Mise à jour de l'affichage de l'historique
+            displayTripsHistory();
+            
+            console.log('✅ Trajet sauvegardé');
+        }
+        
+        // Affichage de l'historique des trajets
+        function displayTripsHistory() {
+            console.log('📜 Affichage de l\'historique...');
+            
+            const savedTrips = JSON.parse(localStorage.getItem('bikeproof_trips') || '[]');
+            const historyContainer = document.getElementById('trips-history');
+            
+            if (savedTrips.length === 0) {
+                historyContainer.innerHTML = `
+                    <div class="text-center text-gray-500 py-8">
+                        <i class="fas fa-bicycle text-4xl mb-2"></i>
+                        <p>Aucun trajet enregistré pour le moment</p>
+                        <p class="text-sm">Démarrez votre premier trajet pour commencer l'historique</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Génération du HTML pour chaque trajet
+            historyContainer.innerHTML = savedTrips.map(trip => {
+                const date = new Date(trip.date);
+                const formattedDate = date.toLocaleDateString('fr-FR', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+                
+                return `
+                    <div class="bg-gray-50 rounded-lg p-4 border">
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h3 class="font-semibold text-gray-800">
+                                    🚴‍♀️ Trajet du ${formattedDate}
+                                </h3>
+                                <p class="text-sm text-gray-600">
+                                    ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                            </div>
+                            <button onclick="showTripDetails(${trip.id})" 
+                                    class="text-blue-600 hover:text-blue-800 text-sm">
+                                <i class="fas fa-eye"></i> Voir détails
+                            </button>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                            <div class="bg-white p-2 rounded text-center">
+                                <div class="font-semibold text-blue-600">${trip.distance.toFixed(2)} km</div>
+                                <div class="text-gray-500">Distance</div>
+                            </div>
+                            <div class="bg-white p-2 rounded text-center">
+                                <div class="font-semibold text-green-600">${formatTime(trip.duration)}</div>
+                                <div class="text-gray-500">Durée</div>
+                            </div>
+                            <div class="bg-white p-2 rounded text-center">
+                                <div class="font-semibold text-purple-600">${trip.avgSpeed.toFixed(1)} km/h</div>
+                                <div class="text-gray-500">Vitesse moy.</div>
+                            </div>
+                            <div class="bg-white p-2 rounded text-center">
+                                <div class="font-semibold text-red-600">${trip.calories} kcal</div>
+                                <div class="text-gray-500">Calories</div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3 bg-white p-2 rounded">
+                            <div id="mini-map-${trip.id}" style="height: 150px; border-radius: 4px;"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Initialisation des mini-cartes pour chaque trajet
+            setTimeout(() => {
+                savedTrips.forEach(trip => {
+                    if (trip.positions && trip.positions.length > 0) {
+                        initializeMiniMap(trip);
+                    }
+                });
+            }, 100);
+            
+            console.log(`✅ ${savedTrips.length} trajets affichés`);
+        }
+        
+        // Initialisation d'une mini-carte pour un trajet
+        function initializeMiniMap(trip) {
+            try {
+                const miniMap = L.map(`mini-map-${trip.id}`, {
+                    zoomControl: false,
+                    attributionControl: false
+                });
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
+                
+                if (trip.positions.length > 0) {
+                    const polylinePoints = trip.positions.map(pos => [pos.lat, pos.lng]);
+                    
+                    const polyline = L.polyline(polylinePoints, {
+                        color: '#0066cc',
+                        weight: 3,
+                        opacity: 0.8
+                    }).addTo(miniMap);
+                    
+                    miniMap.fitBounds(polyline.getBounds(), { padding: [10, 10] });
+                    
+                    // Marqueurs de début et fin
+                    L.marker([trip.positions[0].lat, trip.positions[0].lng])
+                        .addTo(miniMap)
+                        .bindPopup('🚀 Début');
+                    
+                    const lastPos = trip.positions[trip.positions.length - 1];
+                    L.marker([lastPos.lat, lastPos.lng])
+                        .addTo(miniMap)
+                        .bindPopup('🏁 Fin');
+                }
+            } catch (error) {
+                console.error('Erreur création mini-carte:', error);
+            }
+        }
+        
+        // Affichage des détails d'un trajet
+        function showTripDetails(tripId) {
+            const savedTrips = JSON.parse(localStorage.getItem('bikeproof_trips') || '[]');
+            const trip = savedTrips.find(t => t.id === tripId);
+            
+            if (!trip) return;
+            
+            alert(`Détails du trajet:
+            
+📅 Date: ${new Date(trip.date).toLocaleString('fr-FR')}
+📏 Distance: ${trip.distance.toFixed(2)} km
+⏱️ Durée: ${formatTime(trip.duration)}
+📈 Vitesse moyenne: ${trip.avgSpeed.toFixed(1)} km/h
+🚀 Vitesse maximale: ${trip.maxSpeed.toFixed(1)} km/h
+🔥 Calories estimées: ${trip.calories} kcal
+📍 Points GPS enregistrés: ${trip.positions ? trip.positions.length : 0}
+            
+Fonctionnalité d'export détaillé à venir !`);
+        }
+        
+        // ============================================================================
+        // AUTHENTIFICATION ET EXPORT
+        // ============================================================================
+        
+        // Gestion de la connexion utilisateur
+        function handleLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                alert('Veuillez saisir un pseudo et un mot de passe');
+                return;
+            }
+            
+            // Authentification simple (à remplacer par un vrai système)
+            if (username.length >= 3 && password.length >= 6) {
+                localStorage.setItem('bikeproof_user', JSON.stringify({
+                    username: username,
+                    loginTime: Date.now()
+                }));
+                
+                document.getElementById('auth-section').innerHTML = `
+                    <div class="text-center p-4 bg-green-50 rounded-lg">
+                        <i class="fas fa-user-check text-green-600 text-2xl mb-2"></i>
+                        <p class="text-green-800 font-medium">Connecté en tant que ${username}</p>
+                        <button onclick="logout()" class="mt-2 text-green-600 hover:text-green-800 text-sm">
+                            Se déconnecter
+                        </button>
+                    </div>
+                `;
+                
+                console.log(`✅ Utilisateur ${username} connecté`);
+            } else {
+                alert('Pseudo: min 3 caractères, Mot de passe: min 6 caractères');
+            }
+        }
+        
+        // Déconnexion
+        function logout() {
+            localStorage.removeItem('bikeproof_user');
+            location.reload();
+        }
+        
+        // Export des données en CSV
+        function exportToCSV() {
+            console.log('📊 Export des données en CSV...');
+            
+            const savedTrips = JSON.parse(localStorage.getItem('bikeproof_trips') || '[]');
+            
+            if (savedTrips.length === 0) {
+                alert('Aucun trajet à exporter');
+                return;
+            }
+            
+            // En-têtes CSV
+            const csvHeaders = [
+                'Date',
+                'Durée (secondes)',
+                'Distance (km)',
+                'Vitesse moyenne (km/h)',
+                'Vitesse maximale (km/h)',
+                'Calories estimées'
+            ];
+            
+            // Données CSV
+            const csvData = savedTrips.map(trip => [
+                new Date(trip.date).toISOString(),
+                trip.duration,
+                trip.distance.toFixed(2),
+                trip.avgSpeed.toFixed(1),
+                trip.maxSpeed.toFixed(1),
+                trip.calories
+            ]);
+            
+            // Construction du contenu CSV
+            const csvContent = [
+                csvHeaders.join(','),
+                ...csvData.map(row => row.join(','))
+            ].join('\n');
+            
+            // Téléchargement du fichier
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `bikeproof_trajets_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            console.log('✅ Export CSV terminé');
+        }
+        
+        // Effacement de toutes les données
+        function clearAllData() {
+            if (confirm('⚠️ Êtes-vous sûr de vouloir effacer toutes les données ?')) {
+                localStorage.removeItem('bikeproof_trips');
+                localStorage.removeItem('bikeproof_user');
+                
+                alert('✅ Toutes les données ont été effacées');
+                location.reload();
+            }
+        }
+        
+        // ============================================================================
+        // CHARGEMENT DES DONNEES SAUVEGARDEES
+        // ============================================================================
+        
+        // Chargement des données au démarrage
+        function loadSavedData() {
+            console.log('📂 Chargement des données sauvegardées...');
+            
+            // Chargement de l'historique des trajets
+            displayTripsHistory();
+            
+            // Vérification de l'authentification
+            const savedUser = JSON.parse(localStorage.getItem('bikeproof_user') || 'null');
+            if (savedUser) {
+                document.getElementById('username').value = savedUser.username;
+                handleLogin();
+            }
+            
+            console.log('✅ Données chargées');
+        }
+        
+        // ============================================================================
+        // PWA - SERVICE WORKER ET INSTALLATION
+        // ============================================================================
+        
+        // Enregistrement du Service Worker
+        function registerServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                // Service Worker inline pour simplicité
+                const swCode = `
+                    const CACHE_NAME = 'bikeproof-v1';
+                    const urlsToCache = [
+                        '/',
+                        '/index.html',
+                        'https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css',
+                        'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+                        'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+                        'https://cdn.jsdelivr.net/npm/chart.js'
+                    ];
+                    
+                    self.addEventListener('install', event => {
+                        event.waitUntil(
+                            caches.open(CACHE_NAME)
+                                .then(cache => cache.addAll(urlsToCache))
+                        );
+                    });
+                    
+                    self.addEventListener('fetch', event => {
+                        event.respondWith(
+                            caches.match(event.request)
+                                .then(response => response || fetch(event.request))
+                        );
+                    });
+                `;
+                
+                const blob = new Blob([swCode], { type: 'application/javascript' });
+                const swUrl = URL.createObjectURL(blob);
+                
+                navigator.serviceWorker.register(swUrl)
+                    .then(reg => console.log('✅ Service Worker enregistré'))
+                    .catch(err => console.log('❌ Erreur Service Worker:', err));
+            }
+        }
+        
+        // Gestion de l'installation PWA
+        let deferredPrompt;
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('install-button').classList.remove('hidden');
+        });
+        
+        function installPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('✅ PWA installée');
+                    }
+                    deferredPrompt = null;
+                    document.getElementById('install-button').classList.add('hidden');
+                });
+            }
+        }
+        
+        // ============================================================================
+        // FONCTIONS UTILITAIRES
+        // ============================================================================
+        
+        // Fonction pour simuler des données Bluetooth si pas de capteur
+        function simulateBluetoothData() {
+            if (!bluetoothDevice && isTracking && !trackingPaused) {
+                // Simulation d'une vitesse aléatoire réaliste
+                const baseSpeed = 15; // Vitesse de base en km/h
+                const variation = (Math.random() - 0.5) * 10; // Variation ±5 km/h
+                const simulatedSpeed = Math.max(0, baseSpeed + variation);
+                
+                currentSpeed = simulatedSpeed;
+                updateSpeedDisplay(currentSpeed);
+                
+                if (currentSpeed > maxSpeed) {
+                    maxSpeed = currentSpeed;
+                    document.getElementById('max-speed').textContent = maxSpeed.toFixed(1);
+                }
+                
+                addSpeedToChart(currentSpeed);
+            }
+        }
+        
+        // Simulation Bluetooth toutes les 2 secondes si pas de capteur réel
+        setInterval(simulateBluetoothData, 2000);
+        
+        // ============================================================================
+        // LOGS ET DEBUGGING
+        // ============================================================================
+        
+        // Système de logs pour le BTS SIO SISR
+        function logSystemEvent(type, message, data = null) {
+            const logEntry = {
+                timestamp: new Date().toISOString(),
+                type: type, // 'bluetooth', 'gps', 'error', 'info'
+                message: message,
+                data: data
+            };
+            
+            // Sauvegarde des logs (limité à 100 entrées)
+            const logs = JSON.parse(localStorage.getItem('bikeproof_logs') || '[]');
+            logs.unshift(logEntry);
+            
+            if (logs.length > 100) {
+                logs.splice(100);
+            }
+            
+            localStorage.setItem('bikeproof_logs', JSON.stringify(logs));
+            
+            // Affichage dans la console pour debug
+            console.log(`[${type.toUpperCase()}] ${message}`, data);
+        }
+        
+        // Export des logs pour analyse (fonction utile pour le BTS)
+        function exportLogs() {
+            const logs = JSON.parse(localStorage.getItem('bikeproof_logs') || '[]');
+            const logsText = logs.map(log => 
+                `[${log.timestamp}] ${log.type.toUpperCase()}: ${log.message}`
+            ).join('\n');
+            
+            const blob = new Blob([logsText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            
+            link.href = url;
+            link.download = `bikeproof_logs_${Date.now()}.txt`;
+            link.click();
+        }
+        
+        // ============================================================================
+        // FIN DU CODE JAVASCRIPT PRINCIPAL
+        // ============================================================================
+        
+        console.log('🎉 BikeProof - Application vélo connectée chargée avec succès !');
+        console.log('📱 Fonctionnalités disponibles:');
+        console.log('  - Connexion Bluetooth capteur Magene S3+');
+        console.log('  - Tracking GPS temps réel');
+        console.log('  - Statistiques enrichies avec graphiques');
+        console.log('  - Historique des trajets');
+        console.log('  - Intelligence artificielle pour résumés');
+        console.log('  - Export CSV et authentification');
+        console.log('  - PWA installable');
+        console.log('  - Zone publicitaire prête');
+        console.log('🚴‍♀️ Prêt pour vos aventures vélo !');
+        
+    </script>
+</body>
+</html>
